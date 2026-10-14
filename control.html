@@ -54,6 +54,7 @@
   <button class="clr" data-s="none" style="grid-column:span 2">Clear overlay<small>key 0 / Esc</small></button>
 </div>
 <div id="status">Overlay: cleared</div>
+<div id="remote" style="margin-top:4px;padding:6px 8px;border-radius:6px;background:#0f0c15;color:#777;font-size:12px">Stream Deck: off (add ?remote=… to this dock URL)</div>
 
 <h2>Tonight's offers</h2>
 <ol id="hist"></ol>
@@ -158,6 +159,38 @@ addEventListener('keydown',e=>{
 });
 document.documentElement.style.setProperty('--accent',st.accent);
 st.scene='none';push();
+
+/* ---------- Stream Deck / remote buttons ----------
+   Each Stream Deck button is a "Website" action (GET request in background) to
+   https://ntfy.sh/<topic>/publish?message=<command>   — this dock listens on the same topic. */
+const RT=new URLSearchParams(location.search).get('remote');
+function setRemote(t,c){const e=$('remote');e.textContent=t;e.style.color=c||'#a99cc4'}
+function stepWatch(dir){
+  if(!BANK.length)return;let i=st.sel==null?(dir>0?-1:0):st.sel;
+  for(let n=0;n<BANK.length;n++){i=(i+dir+BANK.length)%BANK.length;if(left(i)>0){pick(i);return}}
+}
+function stepBox(dir){
+  read();const m=/#\s*(\d+)/.exec(st.who);const n=Math.max(1,(m?+m[1]:0)+dir);
+  $('who').value=m?st.who.replace(/#\s*\d+/,'#'+n):'Box #'+n;read();push();
+}
+function remote(cmd){
+  const map={calling:'calling',call:'calling',offer:'offer',reveal:'offer',accept:'accepted',accepted:'accepted',
+             decline:'declined',declined:'declined',clear:'none',none:'none'};
+  if(map[cmd]) go(map[cmd]);
+  else if(cmd==='next') stepWatch(1); else if(cmd==='prev') stepWatch(-1);
+  else if(cmd==='box+'||cmd==='boxup') stepBox(1); else if(cmd==='box-'||cmd==='boxdown') stepBox(-1);
+  else if(cmd==='undo') $('undoBank').click();
+  else return setRemote('Stream Deck: unknown command "'+cmd+'"','#c2283b');
+  setRemote('Stream Deck: connected · last: '+cmd+' · '+new Date().toLocaleTimeString(),'#3ee08f');
+}
+if(RT){
+  const seen=new Set();
+  const es=new EventSource('https://ntfy.sh/'+encodeURIComponent(RT)+'/sse');
+  es.onopen=()=>setRemote('Stream Deck: connected','#3ee08f');
+  es.onerror=()=>setRemote('Stream Deck: reconnecting…','#c2283b');
+  es.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.event&&m.event!=='message')return;if(seen.has(m.id))return;seen.add(m.id);
+    remote(String(m.message||'').trim().toLowerCase())}catch(_){}};
+}
 </script>
 </body>
 </html>
