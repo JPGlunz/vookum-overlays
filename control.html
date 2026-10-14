@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dealer Control</title>
+<style>
+  :root{color-scheme:dark;--accent:#7b2ff7}
+  *{box-sizing:border-box}
+  body{margin:0;padding:12px;background:#15121c;color:#eee;font:13px/1.35 Inter,system-ui,Arial,sans-serif}
+  h2{margin:14px 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a99cc4}
+  label{display:block;margin:6px 0 2px;color:#bbb;font-size:12px}
+  input,select{width:100%;padding:7px 8px;border:1px solid #3a3249;border-radius:6px;background:#0f0c15;color:#fff;font:inherit}
+  .row{display:flex;gap:6px}.row>*{flex:1}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  button{padding:12px 6px;border:0;border-radius:8px;font:800 13px/1.1 inherit;color:#fff;cursor:pointer;background:#2c2540}
+  button small{display:block;font-weight:500;opacity:.6;margin-top:3px}
+  button:hover{filter:brightness(1.2)}
+  .call{background:#5a3aa0}.offer{background:var(--accent)}.acc{background:#17955a}.dec{background:#c2283b}.clr{background:#3a3a3a}
+  .live{outline:3px solid #fff}
+  #status{margin-top:8px;padding:6px 8px;border-radius:6px;background:#0f0c15;color:#a99cc4;font-size:12px}
+  details{margin-top:12px;border-top:1px solid #2c2540;padding-top:6px}
+  summary{cursor:pointer;color:#a99cc4;font-size:12px}
+  .hint{color:#777;font-size:11px;margin-top:4px}
+  #hist{margin:4px 0 0;padding-left:18px;color:#bbb}
+  #hist .d{text-decoration:line-through;color:#c2283b}#hist .a{color:#3ee08f;font-weight:700}
+  #bank{display:flex;flex-direction:column;gap:4px}
+  .chip{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:7px;background:#221c31;border:1px solid #3a3249;cursor:pointer;font-weight:700;text-align:left}
+  .chip:hover{border-color:var(--accent)}
+  .chip.sel{border-color:#fff;background:#33285a}
+  .chip .q{font-weight:500;color:#a99cc4;font-size:11px;white-space:nowrap;margin-left:8px}
+  .chip.gone{opacity:.4;text-decoration:line-through}
+  .mini{padding:6px;margin-top:4px;font-size:11px}
+</style>
+</head>
+<body>
+<h2 id="bankTitle">Offer bank</h2>
+<div id="bank"></div>
+<div class="row"><button id="undoBank" class="clr mini">Undo last accept</button><button id="resetBank" class="clr mini">Reset bank</button></div>
+
+<h2>Offer watch</h2>
+<div class="row">
+  <div><label>Brand</label><input id="brand" placeholder="Tudor"></div>
+  <div><label>Ref</label><input id="ref" placeholder="M79230R"></div>
+</div>
+<label>Model</label><input id="model" placeholder="Black Bay 58">
+<label>Photo (optional — file:///… or https://…)</label><input id="photo" placeholder="">
+<label>Box # / bidder (fills {who} in wording)</label><input id="who" placeholder="Box #7 · @handle">
+
+<div class="btns">
+  <button class="call" data-s="calling">Dealer calling<small>key 1</small></button>
+  <button class="offer" data-s="offer">Reveal offer<small>key 2</small></button>
+  <button class="acc" data-s="accepted">Accepted<small>key 3</small></button>
+  <button class="dec" data-s="declined">Declined<small>key 4</small></button>
+  <button class="clr" data-s="none" style="grid-column:span 2">Clear overlay<small>key 0 / Esc</small></button>
+</div>
+<div id="status">Overlay: cleared</div>
+
+<h2>Tonight's offers</h2>
+<ol id="hist"></ol>
+<button id="resetHist" class="clr" style="padding:6px;margin-top:4px;font-size:11px">Clear list</button>
+
+<details>
+  <summary>Look &amp; position</summary>
+  <div class="row">
+    <div><label>Position</label><select id="pos"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></div>
+    <div><label>Accent (Vookum purple)</label><input id="accent" type="color" value="#7b2ff7" style="height:33px;padding:2px"></div>
+  </div>
+  <label><input id="snd" type="checkbox" checked style="width:auto"> Sound stings</label>
+</details>
+
+<details>
+  <summary>Wording (use | for a line break, {who} for box/bidder)</summary>
+  <label>Calling headline</label><input data-w="callingText">
+  <label>Calling subline</label><input data-w="callingSub">
+  <label>Offer label</label><input data-w="offerLabel">
+  <label>Offer subline</label><input data-w="offerSub">
+  <label>Accepted stamp</label><input data-w="acceptTitle">
+  <label>Accepted subline</label><input data-w="acceptSub">
+  <label>Declined stamp</label><input data-w="declineTitle">
+  <label>Declined subline</label><input data-w="declineSub">
+  <button id="resetW" class="clr" style="padding:6px;margin-top:8px;font-size:11px">Reset wording</button>
+  <div class="hint">Alt ideas — Calling: "Incoming Offer" · Accepted: "Sold to the Dealer!", "Taking the Watch!" · Declined: "Not Today!", "Riding the Box!"</div>
+</details>
+
+<script src="bank.js"></script>
+<script>
+const BANK=window.BANK||[];
+const KEY='vk-dealer-state', CH='vk-dealer';
+const DEFAULT_WORDING={
+  callingText:'The Dealer|is calling…', callingSub:'{who}',
+  offerLabel:"The Dealer's Offer", offerSub:'{who}',
+  acceptTitle:'Offer|Accepted', acceptSub:'Box swapped for the watch!',
+  declineTitle:'Offer|Declined', declineSub:'Open the box!'
+};
+let bc;try{bc=new BroadcastChannel(CH)}catch(e){}
+const $=id=>document.getElementById(id);
+let st;try{st=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+st=Object.assign({scene:'none',nonce:0,brand:'',model:'',ref:'',photo:'',who:'',pos:'top',accent:'#7b2ff7',sound:true,
+  wording:{},history:[],used:{},usedLog:[],sel:null},st||{});
+st.wording=Object.assign({},DEFAULT_WORDING,st.wording);
+
+// populate
+['brand','model','ref','photo','who','pos','accent'].forEach(k=>$(k).value=st[k]||'');
+$('snd').checked=st.sound!==false;
+document.querySelectorAll('[data-w]').forEach(el=>el.value=st.wording[el.dataset.w]);
+
+function read(){
+  ['brand','model','ref','photo','who','pos','accent'].forEach(k=>st[k]=$(k).value.trim());
+  st.sound=$('snd').checked;
+  document.querySelectorAll('[data-w]').forEach(el=>st.wording[el.dataset.w]=el.value);
+  document.documentElement.style.setProperty('--accent',st.accent);
+}
+function push(){
+  try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}
+  try{bc&&bc.postMessage(st)}catch(e){}
+  $('status').textContent='Overlay: '+({none:'cleared',calling:'DEALER CALLING',offer:'OFFER SHOWING',accepted:'ACCEPTED',declined:'DECLINED'}[st.scene]);
+  document.querySelectorAll('[data-s]').forEach(b=>b.classList.toggle('live',b.dataset.s===st.scene&&st.scene!=='none'));
+  renderHist();renderBank();
+}
+function left(i){return BANK[i].qty-(st.used[i]||0)}
+function renderBank(){
+  $('bankTitle').textContent=window.BANK_TITLE||'Offer bank';
+  $('bank').innerHTML=BANK.map((b,i)=>{const l=left(i);
+    return `<div class="chip${l<=0?' gone':''}${st.sel===i?' sel':''}" data-i="${i}"><span>${b.short}</span><span class="q">${l<=0?'gone':(b.qty>1?l+' left':'')}</span></div>`}).join('');
+  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>pick(+c.dataset.i));
+}
+function pick(i){
+  const b=BANK[i];if(left(i)<=0)return;
+  st.sel=i;$('brand').value=b.brand;$('model').value=b.model;$('ref').value=b.ref;$('photo').value=b.photo||'';
+  read();push();
+}
+function label(){return [st.brand,st.model,st.ref].filter(Boolean).join(' ')||'(no watch)'}
+function go(scene){
+  read();
+  const last=st.history[st.history.length-1];
+  if(scene==='offer'&&!(last&&last.s==='p'&&last.t===label())) st.history.push({t:label(),who:st.who,s:'p'});
+  if((scene==='accepted'||scene==='declined')&&last&&last.s==='p') last.s=scene==='accepted'?'a':'d';
+  if(scene==='accepted'&&st.sel!=null&&left(st.sel)>0){st.used[st.sel]=(st.used[st.sel]||0)+1;st.usedLog.push(st.sel)}
+  st.scene=scene;st.nonce=Date.now();push();
+}
+function renderHist(){
+  $('hist').innerHTML=st.history.map(h=>`<li class="${h.s}">${h.t.replace(/</g,'&lt;')}${h.who?' — '+h.who.replace(/</g,'&lt;'):''}${h.s==='a'?' ✓':''}</li>`).join('')||'<li style="list-style:none;margin-left:-18px;color:#666">none yet</li>';
+}
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>go(b.dataset.s));
+// live-edit text/look without re-triggering animation
+document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',()=>{read();push()}));
+$('resetW').onclick=()=>{document.querySelectorAll('[data-w]').forEach(el=>el.value=DEFAULT_WORDING[el.dataset.w]);read();push()};
+$('undoBank').onclick=()=>{const i=st.usedLog.pop();if(i!=null){st.used[i]--;push()}};
+let armT;$('resetBank').onclick=e=>{const b=e.currentTarget;
+  if(!b.dataset.arm){b.dataset.arm=1;b.textContent='Click again to reset';armT=setTimeout(()=>{delete b.dataset.arm;b.textContent='Reset bank'},3000);return}
+  clearTimeout(armT);delete b.dataset.arm;b.textContent='Reset bank';st.used={};st.usedLog=[];st.sel=null;push()};
+['brand','model','ref'].forEach(k=>$(k).addEventListener('input',()=>{st.sel=null;renderBank()}));
+$('resetHist').onclick=()=>{st.history=[];push()};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'){if(e.key==='Escape')e.target.blur();return}
+  const m={'1':'calling','2':'offer','3':'accepted','4':'declined','0':'none','Escape':'none'}[e.key];
+  if(m){e.preventDefault();go(m)}
+});
+document.documentElement.style.setProperty('--accent',st.accent);
+st.scene='none';push();
+</script>
+</body>
+</html>
