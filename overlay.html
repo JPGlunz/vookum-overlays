@@ -204,7 +204,16 @@ if(STATIC){
   const init=load(); if(init){init.scene='none'; apply(init);}
   try{new BroadcastChannel(CH).onmessage=e=>document.fonts.ready.then(()=>apply(e.data))}catch(e){}
   addEventListener('storage',e=>{if(e.key===KEY&&e.newValue){try{apply(JSON.parse(e.newValue))}catch(_){}}});
+  // fallback: poll shared storage in case OBS doesn't deliver events between dock and source
+  let lastRaw=null;try{lastRaw=localStorage.getItem(KEY)}catch(_){}
+  setInterval(()=>{let r=null;try{r=localStorage.getItem(KEY)}catch(_){return}
+    if(r&&r!==lastRaw){lastRaw=r;try{apply(JSON.parse(r))}catch(_){}}},300);
 }
+// ?debug=1 shows a small status line so you can see whether the dock is reaching the overlay
+if(params.has('debug')){const d=document.createElement('div');
+  d.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9;font:600 14px/1.3 Inter,Arial,sans-serif;color:#fff;background:rgba(0,0,0,.7);padding:6px 10px;border-radius:6px';
+  document.body.appendChild(d);const _a=apply;apply=s=>{_a(s);d.textContent='overlay OK · last: '+(s.scene||'none')+' · '+new Date().toLocaleTimeString()};
+  d.textContent='overlay OK · waiting for dock… ('+innerWidth+'×'+innerHeight+')';}
 
 /* ---------- confetti ---------- */
 const cv=document.getElementById('fx'),cx=cv.getContext('2d');let parts=[],raf=0,fxEnd=0;
