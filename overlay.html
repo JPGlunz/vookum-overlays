@@ -212,7 +212,7 @@ if(STATIC){
   for(const k in DEFAULT_WORDING) if(params.has(k)) s.wording[k]=params.get(k);
   document.fonts.ready.then(()=>apply(s));
 }else{
-  const init=load(); if(init){init.scene='none'; apply(init);}
+  const init=load(); if(init){init.scene='none'; setTimeout(()=>apply(init),0);}  // deferred: effects code below must finish loading first
   try{new BroadcastChannel(CH).onmessage=e=>document.fonts.ready.then(()=>apply(e.data))}catch(e){}
   addEventListener('storage',e=>{if(e.key===KEY&&e.newValue){try{apply(JSON.parse(e.newValue))}catch(_){}}});
   // fallback: poll shared storage in case OBS doesn't deliver events between dock and source
